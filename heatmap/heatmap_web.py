@@ -339,10 +339,12 @@ def collect_us(asof):
     except Exception:
         q = {}
     capnote = "야후"
-    if len(q) < len(syms) * 0.9:  # cloud 1125: 클라우드(데이터센터 IP)에선 야후 crumb·v7 시세가 막힘(429/401) → 기준일 시총 × 그 뒤 주가 변화로 추정
-        ref = json.load(open(os.path.join(AV, "cache", "us_caps_ref.json"), encoding="utf-8"))["quotes"]
-        q = {k: dict(v, ref=True) for k, v in ref.items()}
-        capnote = f"야후 {min(v['t'] for v in ref.values())} 시총 × 이후 주가 변화(추정)"
+    shares = {}
+    if len(q) < len(syms) * 0.9:  # cloud 1125: 클라우드(데이터센터 IP)에선 야후 crumb·v7 시세가 막힘(429/401) → 주식 수(us_shares.json, 주 1회 갱신) × 종가
+        sd = json.load(open(os.path.join(AV, "cache", "us_shares.json"), encoding="utf-8"))
+        shares = sd["shares"]
+        q = {k: {"cap": 0} for k in shares}
+        capnote = f"주식 수({sd['src']}, {sd['asof']}) × 종가"
     S = requests.Session(); S.headers["User-Agent"] = UA
     with ThreadPoolExecutor(4) as ex:
         hs = list(ex.map(lambda s: both(s, S, asof), syms))
@@ -352,12 +354,7 @@ def collect_us(asof):
         if not h or len(h) < 2 or s not in q:
             fail.append(s); continue
         tv = s.replace("-", ".")
-        cap = q[s]["cap"]
-        if q[s].get("ref"):
-            c0 = next((x[4] for x in reversed(h) if x[0] <= q[s]["t"]), None)
-            if not c0:
-                fail.append(s); continue
-            cap = cap * h[-1][4] / c0
+        cap = shares[s] * h[-1][4] if shares else q[s]["cap"]
         items.append({"s": s, "name": r["name"], "ko": ko.get(s, "") if ko.get(s) != s else "", "sec": r["sector"], "ind": r["industry"],
                       "cap": cap, "chg": round((h[-1][4] / h[-2][4] - 1) * 100, 2), "date": h[-1][0],
                       "tv": f"https://www.tradingview.com/symbols/{exch + '-' if exch else ''}{tv}/", "b": pack(h, "US", MO.get(s)), "f": above(h, "US")})

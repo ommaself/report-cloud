@@ -1,0 +1,32 @@
+name: us-shares
+# 매주 월 15:00 KST(06:00 UTC): 미장 주식 수 갱신(SEC 공시) → cache/us_shares.json 커밋
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: heatmap
+  cancel-in-progress: false
+jobs:
+  shares:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests==2.32.3
+      - name: update
+        env:
+          SEC_UA: ${{ secrets.SEC_UA }}
+        run: python -I heatmap/us_shares.py
+      - name: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add heatmap/cache/us_shares.json
+          git diff --cached --quiet || git commit -m "주식 수 주간 갱신 $(date -u +%F)"
+          git push
