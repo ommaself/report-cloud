@@ -3,7 +3,8 @@ r"""섹터 ETF 상대강도(미국 vs SPY · 한국 vs KODEX 200) 차트 → 리
 방마다 앨범 2개(미국 → 한국, 사이 3초). 캡션·그림 만드는 부분은 PC판 그대로.
 PC판과 다른 점: 방 = common/rooms.json 번호(--rooms 1,2,…), 토큰 = 깃허브 비밀값 TG_TOKEN, 상태 파일 없음
 (--first-trading-day는 '오늘이 이번 주 첫 한국 거래일'만 봄. 예약은 하루 한 번이라 같은 주 두 번 안 감).
-운영 알림(완료·휴일)은 PC판처럼 꺼짐(2026-11-14 대표). 실패는 실행 기록에 남고, 깃허브 실패 단계는 워크플로가 처리.
+알림(11/25 대표 '절대 재발 금지' 원칙이 11/14 '알림 끔'보다 우선): 기준일이 직전 거래일이 아니면 발송 중단 + 내 방 [중단] 경고,
+만들기·발송 실패도 내 방에 한 줄(조용한 실패 금지). 완료·휴일 알림은 계속 꺼짐.
 사용: python rs/rs_send_cloud.py --rooms 1,2,3,4,5,6,7 --first-trading-day [--dry] [--date YYYY-MM-DD] [--set auto|monday|weekday]
 """
 import argparse, datetime as dt, json, os, re, sys, time
@@ -13,6 +14,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import rs_quadrant as rq
 import rs_quadrant_kr as kr
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "common"))
+import fresh  # 기준일 검사(11/25 대표 재발 금지 원칙)
 
 OUT = os.path.join(os.path.dirname(HERE), "out")
 ROOMS = json.load(open(os.path.join(os.path.dirname(HERE), "common", "rooms.json"), encoding="utf-8"))["rooms"]
@@ -61,20 +64,44 @@ def build_market(px, names, title, tag, kind):
     return files, cap[:1024]
 
 
-def build(kind):
+class Stale(Exception):
+    pass
+
+
+def check_date(px, market):
+    got, e = px.index[-1].date(), fresh.expected(market)
+    if got != e:
+        raise Stale(f"[중단] 섹터 상대강도 {'미국' if market == 'US' else '한국'}: 기준일 {got} ≠ 직전 거래일 {e} → 이번 주 발송 안 함")
+
+
+def alert(text):
+    """내 방(rooms.json 1번)에 한 줄. 토큰·방 ID는 로그에 안 찍음."""
+    tok = os.environ.get("TG_TOKEN", "").strip()
+    log("알림: " + text)
+    if not tok:
+        return
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": ROOMS[0]["id"], "text": text[:900]}, timeout=30)
+        log(f"알림 발송 {'성공' if r.ok else '실패'} HTTP {r.status_code}")
+    except Exception as e:
+        log(f"알림 발송 오류 {type(e).__name__}: {e}")
+
+
+def build(kind, check=False):
     os.makedirs(OUT, exist_ok=True)
     us = rq.load()
+    if check: check_date(us, "US")
     usa = build_market(us, dict(rq.NAME), "미국 섹터 ETF 상대강도 (vs SPY)", "us", kind)
     kr.setup()
     kp = kr.load()
+    if check: check_date(kp, "KR")
     kra = build_market(kp, {c: v[0] for c, v in kr.ETFS.items()}, "한국 섹터 ETF 상대강도 (vs KODEX 200)", "kr", kind)
     kra = (kra[0], (kra[1] + "\n국내 시세: 야후 기준(임시), 공식 종가와 조금 다를 수 있음")[:1024])  # cloud 1125: PC판은 네이버, 클라우드는 야후
     return [("미국", *usa), ("한국", *kra)]
 
 
 def is_trading(d):
-    import holidays
-    return d.weekday() < 5 and d not in holidays.KR(years=d.year) and (d.month, d.day) != (12, 31)
+    return fresh.is_trading("KR", d)
 
 
 def send_album(tok, chat_id, files, cap):
@@ -104,7 +131,16 @@ def main():
             log(f"{today} 이번 주 첫 거래일이 이미 지남 → 안 보냄"); return 0
     if a.kind == "auto":
         a.kind = "monday" if (a.first_day or today.weekday() == 0) else "weekday"
-    albums = build(a.kind)
+    try:
+        albums = build(a.kind, check=a.first_day)
+    except Stale as e:
+        log(str(e))
+        if not a.dry: alert(str(e))
+        return 3
+    except Exception as e:
+        log(f"만들기 실패 {type(e).__name__}: {e}")
+        if not a.dry: alert(f"[깃허브] 섹터 상대강도 만들기 실패 {type(e).__name__} · 이번 주 발송 안 됨")
+        return 1
     want = [int(x) for x in a.rooms.split(",") if x.strip()]
     targets = [(r["n"], r["name"], str(r["id"])) for n in want for r in ROOMS if r["n"] == n]
     log("받는 방: " + ", ".join(f"{n}번 {nm}" for n, nm, _ in targets))
@@ -114,7 +150,7 @@ def main():
         return 0
     tok = os.environ.get("TG_TOKEN", "").strip()
     if not tok:
-        log("TG_TOKEN 없음 → 안 보냄"); return 1
+        log("TG_TOKEN 없음 → 안 보냄"); return 1  # 토큰 없으면 알림도 못 보냄(실행 기록에만)
     fails = []
     for n, nm, cid in targets:
         for mk, files, cap in albums:
@@ -127,7 +163,9 @@ def main():
                 log(f"보냄 방 {n}번 {mk} 오류 {type(e).__name__}: {e}"); fails.append(f"방 {n}번 {mk}")
             time.sleep(3)
     if fails:
-        log("실패: " + ", ".join(fails)); return 1
+        log("실패: " + ", ".join(fails))
+        alert("[깃허브] 섹터 상대강도 발송 실패: " + ", ".join(fails))
+        return 1
     return 0
 
 

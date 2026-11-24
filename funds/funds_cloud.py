@@ -3,6 +3,7 @@ r"""증시 자금(고객예탁금·신용잔고·반대매매) 리포트 — 깃
 - 자료: 금융투자협회 FreeSIS(공개, 키 불필요). 차트 배경 코스피 = 야후 ^KS11(PC판의 네이버 fchart·키움 대신)
 - 예약 1번(15:10 KST)이 15:45까지 5분마다 확인 → 금투협이 직전 영업일로 갱신되면 그때 1번 보내고 끝(같은 날 두 번 안 감, 상태 파일 없음)
 - 휴장일(한국 공휴일·주말·12/31)이면 건너뜀
+- 11/25 대표 재발 금지 원칙: 15:45까지 금투협이 직전 영업일로 안 바뀌면 발송 중단 + 내 방 [중단] 경고, 발송 실패도 내 방 한 줄
 - 방 = common/rooms.json 번호(--rooms), 토큰 = 비밀값 TG_TOKEN. 로그엔 토큰·방 ID 가림
 사용: python funds/funds_cloud.py --rooms 1,2,5,3 [--dry] [--no-wait]
 """
@@ -192,16 +193,23 @@ def make(data):
     return day, text + "\n" + one_line(data)
 
 
-def is_trading(d):
-    import holidays
-    return d.weekday() < 5 and d not in holidays.KR(years=d.year) and (d.month, d.day) != (12, 31)
+sys.path.insert(0, os.path.join(ROOT, "common"))
+import fresh  # noqa: E402
+
+is_trading = lambda d: fresh.is_trading("KR", d)
+prev_trading = lambda d: fresh.prev_trading("KR", d)
 
 
-def prev_trading(d):
-    d -= dt.timedelta(days=1)
-    while not is_trading(d):
-        d -= dt.timedelta(days=1)
-    return d
+def alert(text):
+    tok = os.environ.get("TG_TOKEN", "").strip()
+    log("알림: " + text)
+    if not tok:
+        return
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": ROOMS[0]["id"], "text": text[:900]}, timeout=30)
+        log(f"알림 발송 {'성공' if r.ok else '실패'} HTTP {r.status_code}")
+    except Exception as e:
+        log(f"알림 발송 오류 {type(e).__name__}: {e}")
 
 
 def send(tok, chats, text, png):
@@ -232,6 +240,15 @@ def main():
     ap.add_argument("--no-wait", action="store_true", help="금투협 갱신 안 기다림(수동 시험)")
     ap.add_argument("--until", default="15:45", help="이 시각(KST)까지 5분마다 다시 확인")
     a = ap.parse_args()
+    try:
+        return run(a)
+    except Exception as e:
+        log(f"실행 실패 {type(e).__name__}: {e}")
+        if not a.dry: alert(f"[깃허브] 증시 자금 실행 실패 {type(e).__name__} · 오늘 발송 안 됨")
+        return 1
+
+
+def run(a):
     today = dt.datetime.now(KST).date()
     if not a.no_wait:
         if not is_trading(today):
@@ -244,7 +261,10 @@ def main():
         if data and (a.no_wait or day >= prev):
             break
         if dt.datetime.now(KST).strftime("%H:%M") >= a.until:
-            log("금투협 미갱신 → 오늘은 안 보냄"); return 1
+            msg = f"[중단] 증시 자금: 금투협 기준일 {day} ≠ 직전 영업일 {prev} ({a.until}까지 확인) → 오늘 발송 안 함"
+            log(msg)
+            if not a.dry: alert(msg)
+            return 3
         time.sleep(300)
     day, text = make(data)
     log(text)
@@ -259,12 +279,16 @@ def main():
     chats = [(r["n"], str(r["id"])) for n in want for r in ROOMS if r["n"] == n]
     log("받는 방: " + ", ".join(f"{n}번" for n, _ in chats))
     if a.dry:
+        if png and os.environ.get("PREVIEW_B64") == "1":  # 검수용: 그림을 실행 기록에 base64로(내려받기 막힌 환경용)
+            import base64
+            print("PNG_B64_BEGIN\n" + base64.b64encode(png).decode() + "\nPNG_B64_END", flush=True)
         log("dry → 안 보냄"); return 0
     tok = os.environ.get("TG_TOKEN", "").strip()
     if not tok:
         log("TG_TOKEN 없음 → 안 보냄"); return 1
     fails = send(tok, chats, text, png)
     if fails:
+        alert("[깃허브] 증시 자금 발송 실패: " + ", ".join(f"방 {n}번" for n in fails))
         os.makedirs(os.path.join(ROOT, "out"), exist_ok=True)
         open(os.path.join(ROOT, "out", "send_fail.txt"), "a", encoding="utf-8").write("".join(f"증시 자금 방 {n}번 실패\n" for n in fails))
         return 1

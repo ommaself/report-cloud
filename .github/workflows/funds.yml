@@ -2,6 +2,7 @@ name: funds
 # 증시 자금 — 평일 15:10 KST(06:10 UTC). 금투협이 갱신될 때까지 15:45까지 5분마다 확인하고 1번 보냄
 # 발송 스위치: 변수 FUNDS_SEND = on (PC '증시 자금 리포트' 작업을 끈 뒤에만). 방 = 변수 FUNDS_ROOMS(rooms.json 번호, 기본 1)
 # PC판 방 = 1 내 방 2 투자 아이디어 5 KIC 3 금요일 온라인 스터디
+# 알림(11/25 재발 금지 원칙): 15:45까지 금투협 미갱신 = 발송 중단 + 내 방 [중단], 실행·발송 실패 = 내 방 한 줄
 on:
   schedule:
     - cron: "10 6 * * 1-5"
@@ -31,6 +32,7 @@ jobs:
       - name: build (and send)
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          PREVIEW_B64: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         run: |
           ARGS="--rooms ${{ github.event.inputs.rooms || vars.FUNDS_ROOMS || '1' }}"
           if [ "${{ github.event_name }}" = "schedule" ]; then
@@ -40,6 +42,11 @@ jobs:
             if [ "${{ github.event.inputs.dry }}" != "no" ] || [ "${{ vars.FUNDS_SEND }}" != "on" ]; then ARGS="$ARGS --dry"; fi
           fi
           python -I funds/funds_cloud.py $ARGS
+      - name: alert on crash
+        if: failure() && vars.FUNDS_SEND == 'on' && github.event_name == 'schedule'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: python -I common/tg_alert.py "[깃허브] 증시 자금 실행 실패 · https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

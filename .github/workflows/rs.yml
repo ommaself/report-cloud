@@ -2,7 +2,7 @@ name: rs-quadrant
 # 섹터 ETF 상대강도(미국·한국) — 평일 06:50 KST(21:50 UTC 전날), 이번 주 첫 한국 거래일에만 보냄(PC rs_send.py와 같은 규칙)
 # 발송 스위치: 저장소 변수 RS_SEND = on (PC RS 작업을 끈 뒤에만 켤 것, 아니면 두 번 감). 방 = 변수 RS_ROOMS(rooms.json 번호, 기본 1 = 내 방)
 # PC판 방 = 1 내 방 2 투자 아이디어 3 금요일 온라인 스터디 4 일정매매 5 KIC 6 송도스터디(SCV) 7 모닝레터 (추추클럽 없음)
-# 운영 알림(완료·실패·휴일)은 PC판처럼 꺼짐(2026-11-14 대표 "내 방 RS 알림 다 꺼줘")
+# 알림: 기준일 ≠ 직전 거래일이면 발송 중단 + 내 방 [중단], 만들기·발송 실패도 내 방 한 줄(11/25 대표 재발 금지 원칙). 완료·휴일 알림은 꺼짐
 on:
   schedule:
     - cron: "50 21 * * 0-4"
@@ -47,6 +47,11 @@ jobs:
             if [ "${{ github.event.inputs.dry }}" != "no" ] || [ "${{ vars.RS_SEND }}" != "on" ]; then ARGS="$ARGS --dry"; fi
           fi
           python -I rs/rs_send_cloud.py $ARGS
+      - name: alert on crash
+        if: failure() && vars.RS_SEND == 'on' && github.event_name == 'schedule'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: python -I common/tg_alert.py "[깃허브] 섹터 상대강도 실행 실패 · https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
       - name: check (김진·KJ·네이버 0건)
         run: |
           ! grep -rlE "김진|KJ|naver" rs/*.py

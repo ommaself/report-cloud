@@ -31,7 +31,7 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: heatmap/requirements.txt
-      - run: pip install -r heatmap/requirements.txt
+      - run: pip install -r heatmap/requirements.txt -r common/requirements.txt
       - name: pick market
         id: m
         run: |
@@ -50,24 +50,32 @@ jobs:
         run: |
           ! grep -lE "김진|KJ|naver" out/*.html
       # 발송 스위치: 저장소 변수 HEATMAP_SEND = on 일 때만(대표 '승인' 뒤에 켬). 방 = common/rooms.json 번호(저장소 변수 HEATMAP_ROOMS, 기본 1 = 내 방만): 1 내 방 2 투자 아이디어 3 금요일 온라인 스터디 4 일정매매 5 KIC 6 송도스터디(SCV) 7 모닝레터 8 추추클럽(11/25 대표 '그냥 모든 방에 진행해').
-      # 휴장일(기준일 ≠ 그 시장 오늘)은 건너뜀. 수동 실행(workflow_dispatch)은 날짜 검사 없이 보냄.
+      # 예약 실행: 그 시장 휴장일이면 안 보냄. 기준일 ≠ 직전 거래일이면 발송 중단 + 내 방 [중단] 경고(11/25 대표 재발 금지 원칙). 수동 실행은 검사 없이 보냄.
       - name: send KR
         if: vars.HEATMAP_SEND == 'on' && (steps.m.outputs.market == 'KR' || steps.m.outputs.market == 'both')
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(python -I common/is_fresh.py out/heatmap_KR.html KR)" != "yes" ]; then echo "휴장일 → 발송 건너뜀"; exit 0; fi
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            set +e; MSG=$(python -I common/heatmap_check.py out/heatmap_KR.html KR); RC=$?; set -e; echo "$MSG"
+            if [ $RC -eq 2 ]; then exit 0; fi
+            if [ $RC -ne 0 ]; then python -I common/tg_alert.py "$MSG"; echo "STALE=1" >> "$GITHUB_ENV"; exit 1; fi
+          fi
           python -I common/tg_send.py --file out/heatmap_KR.html --rooms "${{ github.event.inputs.rooms || vars.HEATMAP_ROOMS || '1' }}" --caption "$(python -I common/caption.py out/heatmap_KR.html '국내 히트맵')"
       - name: send US
         if: vars.HEATMAP_SEND == 'on' && (steps.m.outputs.market == 'US' || steps.m.outputs.market == 'both')
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(python -I common/is_fresh.py out/heatmap_US.html US)" != "yes" ]; then echo "휴장일 → 발송 건너뜀"; exit 0; fi
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            set +e; MSG=$(python -I common/heatmap_check.py out/heatmap_US.html US); RC=$?; set -e; echo "$MSG"
+            if [ $RC -eq 2 ]; then exit 0; fi
+            if [ $RC -ne 0 ]; then python -I common/tg_alert.py "$MSG"; echo "STALE=1" >> "$GITHUB_ENV"; exit 1; fi
+          fi
           python -I common/tg_send.py --file out/heatmap_US.html --rooms "${{ github.event.inputs.rooms || vars.HEATMAP_ROOMS || '1' }}" --caption "$(python -I common/caption.py out/heatmap_US.html 'S&P500 히트맵')"
       # 실패 알림: 만들기·검사·발송 중 하나라도 실패하면 내 방(rooms.json 1번)에 한 줄
       - name: alert on failure
-        if: failure() && vars.HEATMAP_SEND == 'on'
+        if: failure() && vars.HEATMAP_SEND == 'on' && env.STALE != '1'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
         run: python -I common/tg_alert.py "[깃허브] 히트맵 ${{ steps.m.outputs.market }} 실패 · 실행 기록 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
