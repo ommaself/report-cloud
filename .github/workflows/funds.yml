@@ -1,0 +1,49 @@
+name: funds
+# 증시 자금 — 평일 15:10 KST(06:10 UTC). 금투협이 갱신될 때까지 15:45까지 5분마다 확인하고 1번 보냄
+# 발송 스위치: 변수 FUNDS_SEND = on (PC '증시 자금 리포트' 작업을 끈 뒤에만). 방 = 변수 FUNDS_ROOMS(rooms.json 번호, 기본 1)
+# PC판 방 = 1 내 방 2 투자 아이디어 5 KIC 3 금요일 온라인 스터디
+on:
+  schedule:
+    - cron: "10 6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      rooms:
+        description: "보낼 방 번호. 비우면 변수 FUNDS_ROOMS"
+        default: "1"
+      dry:
+        description: "yes = 안 보냄"
+        default: "yes"
+permissions:
+  contents: read
+jobs:
+  funds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      TZ: Asia/Seoul
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get install -y -q fonts-nanum >/dev/null && fc-cache -f >/dev/null
+      - run: pip install -r funds/requirements.txt
+      - name: build (and send)
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: |
+          ARGS="--rooms ${{ github.event.inputs.rooms || vars.FUNDS_ROOMS || '1' }}"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "${{ vars.FUNDS_SEND }}" != "on" ]; then ARGS="$ARGS --dry"; fi
+          else
+            ARGS="$ARGS --no-wait"
+            if [ "${{ github.event.inputs.dry }}" != "no" ] || [ "${{ vars.FUNDS_SEND }}" != "on" ]; then ARGS="$ARGS --dry"; fi
+          fi
+          python -I funds/funds_cloud.py $ARGS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: funds-${{ github.run_number }}
+          path: out/*.png
+          if-no-files-found: ignore
+          retention-days: 30
