@@ -1,6 +1,6 @@
 name: heatmap
 # 국장: 평일 16:40 KST(07:40 UTC) / 미장: 평일 장 마감 뒤 07:30 KST(22:30 UTC, 전날 미장)
-# 아직 공개 안 함: 결과 HTML은 이 비공개 저장소 실행 기록(Artifacts)에만 남김
+# 공개 안 함(11/25 대표: 비공개 + 텔레 방 발송). 결과 HTML은 실행 기록(Artifacts)에도 30일
 on:
   schedule:
     - cron: "40 7 * * 1-5"
@@ -46,6 +46,19 @@ jobs:
       - name: check (김진·KJ·네이버 0건)
         run: |
           ! grep -lE "김진|KJ|naver" out/*.html
+      # 발송 스위치: 저장소 변수 HEATMAP_SEND = on 일 때만(대표 '승인' 뒤에 켬). 처음엔 내 방만(TG_CHAT).
+      - name: send KR
+        if: vars.HEATMAP_SEND == 'on' && (steps.m.outputs.market == 'KR' || steps.m.outputs.market == 'both')
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT: ${{ secrets.TG_CHAT }}
+        run: python -I common/tg_send.py --file out/heatmap_KR.html --caption "$(python -I common/caption.py out/heatmap_KR.html '국내 히트맵')"
+      - name: send US
+        if: vars.HEATMAP_SEND == 'on' && (steps.m.outputs.market == 'US' || steps.m.outputs.market == 'both')
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT: ${{ secrets.TG_CHAT }}
+        run: python -I common/tg_send.py --file out/heatmap_US.html --caption "$(python -I common/caption.py out/heatmap_US.html 'S&P500 히트맵')"
       - uses: actions/upload-artifact@v4
         with:
           name: heatmap-${{ steps.m.outputs.market }}-${{ github.run_number }}
