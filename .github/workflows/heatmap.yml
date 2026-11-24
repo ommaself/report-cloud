@@ -47,18 +47,30 @@ jobs:
         run: |
           ! grep -lE "김진|KJ|naver" out/*.html
       # 발송 스위치: 저장소 변수 HEATMAP_SEND = on 일 때만(대표 '승인' 뒤에 켬). 방 = 비밀값 TG_CHATS(내 방 + 리포트 방 7, 11/25 대표 '그냥 모든 방에 진행해').
+      # 휴장일(기준일 ≠ 그 시장 오늘)은 건너뜀. 수동 실행(workflow_dispatch)은 날짜 검사 없이 보냄.
       - name: send KR
         if: vars.HEATMAP_SEND == 'on' && (steps.m.outputs.market == 'KR' || steps.m.outputs.market == 'both')
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHATS: ${{ secrets.TG_CHATS }}
-        run: python -I common/tg_send.py --file out/heatmap_KR.html --caption "$(python -I common/caption.py out/heatmap_KR.html '국내 히트맵')"
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(python -I common/is_fresh.py out/heatmap_KR.html KR)" != "yes" ]; then echo "휴장일 → 발송 건너뜀"; exit 0; fi
+          python -I common/tg_send.py --file out/heatmap_KR.html --caption "$(python -I common/caption.py out/heatmap_KR.html '국내 히트맵')"
       - name: send US
         if: vars.HEATMAP_SEND == 'on' && (steps.m.outputs.market == 'US' || steps.m.outputs.market == 'both')
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHATS: ${{ secrets.TG_CHATS }}
-        run: python -I common/tg_send.py --file out/heatmap_US.html --caption "$(python -I common/caption.py out/heatmap_US.html 'S&P500 히트맵')"
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(python -I common/is_fresh.py out/heatmap_US.html US)" != "yes" ]; then echo "휴장일 → 발송 건너뜀"; exit 0; fi
+          python -I common/tg_send.py --file out/heatmap_US.html --caption "$(python -I common/caption.py out/heatmap_US.html 'S&P500 히트맵')"
+      # 실패 알림: 만들기·검사·발송 중 하나라도 실패하면 내 방(TG_ALERT_CHAT)에 한 줄
+      - name: alert on failure
+        if: failure() && vars.HEATMAP_SEND == 'on'
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_ALERT_CHAT: ${{ secrets.TG_ALERT_CHAT }}
+        run: python -I common/tg_alert.py "[깃허브] 히트맵 ${{ steps.m.outputs.market }} 실패 · 실행 기록 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
       - uses: actions/upload-artifact@v4
         with:
           name: heatmap-${{ steps.m.outputs.market }}-${{ github.run_number }}
