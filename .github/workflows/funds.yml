@@ -5,7 +5,9 @@ name: funds
 # 알림(11/25 재발 금지 원칙): 15:45까지 금투협 미갱신 = 발송 중단 + 내 방 [중단], 실행·발송 실패 = 내 방 한 줄
 on:
   schedule:
-    - cron: "10 6 * * 1-5"
+    - cron: "10 6 * * 1-5"   # 15:10 KST
+    - cron: "50 6 * * 1-5"   # 예비(15:50)
+    - cron: "30 7 * * 1-5"   # 예비(16:30)
   workflow_dispatch:
     inputs:
       rooms:
@@ -17,7 +19,23 @@ on:
 permissions:
   contents: read
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      go: ${{ steps.g.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: g
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash common/guard.sh funds.yml 150
   funds:
+    needs: guard
+    if: needs.guard.outputs.go == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:

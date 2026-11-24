@@ -5,7 +5,9 @@ name: rs-quadrant
 # 알림: 기준일 ≠ 직전 거래일이면 발송 중단 + 내 방 [중단], 만들기·발송 실패도 내 방 한 줄(11/25 대표 재발 금지 원칙). 완료·휴일 알림은 꺼짐
 on:
   schedule:
-    - cron: "50 21 * * 0-4"
+    - cron: "50 21 * * 0-4"  # 06:50 KST
+    - cron: "30 22 * * 0-4"  # 예비
+    - cron: "10 23 * * 0-4"  # 예비
   workflow_dispatch:
     inputs:
       rooms:
@@ -20,7 +22,23 @@ on:
 permissions:
   contents: read
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      go: ${{ steps.g.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: g
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash common/guard.sh rs.yml 150
   rs:
+    needs: guard
+    if: needs.guard.outputs.go == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

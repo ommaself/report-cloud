@@ -3,8 +3,12 @@ name: heatmap
 # 공개 안 함(11/25 대표: 비공개 + 텔레 방 발송). 결과 HTML은 실행 기록(Artifacts)에도 30일
 on:
   schedule:
-    - cron: "40 7 * * 1-5"
-    - cron: "30 22 * * 1-5"
+    - cron: "40 7 * * 1-5"   # 국장 16:40 KST
+    - cron: "20 8 * * 1-5"   # 국장 예비
+    - cron: "0 9 * * 1-5"    # 국장 예비
+    - cron: "30 22 * * 1-5"  # 미장 07:30 KST
+    - cron: "10 23 * * 1-5"  # 미장 예비
+    - cron: "50 23 * * 1-5"  # 미장 예비
   workflow_dispatch:
     inputs:
       market:
@@ -22,7 +26,23 @@ concurrency:
   group: heatmap
   cancel-in-progress: false
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      go: ${{ steps.g.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: g
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash common/guard.sh heatmap.yml 150
   build:
+    needs: guard
+    if: needs.guard.outputs.go == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -40,7 +60,7 @@ jobs:
         run: |
           M="${{ github.event.inputs.market }}"
           if [ -z "$M" ]; then
-            if [ "${{ github.event.schedule }}" = "40 7 * * 1-5" ]; then M=KR; else M=US; fi
+            H=$(date -u +%-H); if [ "$H" -ge 6 ] && [ "$H" -lt 15 ]; then M=KR; else M=US; fi  # 국장 07:40~09:00 UTC(지연 포함), 미장 22:30~23:50 UTC
           fi
           echo "market=$M" >> "$GITHUB_OUTPUT"
       - name: KR
