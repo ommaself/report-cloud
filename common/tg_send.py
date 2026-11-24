@@ -22,6 +22,8 @@ def main():
     chats = [str(r["id"]) for n in want for r in ROOMS if r["n"] == n]
     if not tok or not chats:
         print("TG_TOKEN 없음 또는 방 없음 → 발송 안 함"); return 1
+    if not re.fullmatch(r"\d{6,}:[A-Za-z0-9_-]{30,}", tok):  # 값은 안 찍고 모양만
+        print(f"TG_TOKEN 모양이 봇 토큰이 아님(길이 {len(tok)}, 콜론 {'있음' if ':' in tok else '없음'}) → 비밀값 다시 넣기 필요")
     bad = 0
     for i, chat in zip(want, chats):
         ok = False
