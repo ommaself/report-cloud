@@ -208,6 +208,9 @@ def alert(text):
     try:
         r = requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": ROOMS[0]["id"], "text": text[:900]}, timeout=30)
         log(f"알림 발송 {'성공' if r.ok else '실패'} HTTP {r.status_code}")
+        if r.ok:
+            gh = os.environ.get("GITHUB_ENV")  # 한 사건엔 알림 하나: 이미 알렸으면 yml 'alert on crash'가 또 안 보냄
+            if gh: open(gh, "a").write("ALERTED=1\n")
     except Exception as e:
         log(f"알림 발송 오류 {type(e).__name__}: {e}")
 
@@ -250,18 +253,19 @@ def main():
 
 def run(a):
     today = dt.datetime.now(KST).date()
-    if not a.no_wait:
-        if not is_trading(today):
-            log(f"{today} 휴장일 → 건너뜀"); return 0
-        prev = prev_trading(today).strftime("%Y%m%d")
+    if not a.no_wait and not is_trading(today):
+        log(f"{today} 휴장일 → 건너뜀"); return 0
+    prev = prev_trading(today).strftime("%Y%m%d")
     while True:
         data = fetch()
         day = data[0][0]["TMPV1"] if data else None
         log(f"금투협 기준일 {day}")
-        if data and (a.no_wait or day >= prev):
+        if data and day >= prev:
             break
-        if dt.datetime.now(KST).strftime("%H:%M") >= a.until:
-            msg = f"[중단] 증시 자금: 금투협 기준일 {day} ≠ 직전 영업일 {prev} ({a.until}까지 확인) → 오늘 발송 안 함"
+        if data and a.no_wait and a.dry:  # 수동 시험(발송 안 함)만 옛 자료로 그림 확인 허용
+            log(f"dry 시험: 기준일 {day} (직전 영업일 {prev}) 그대로 그림만"); break
+        if a.no_wait or dt.datetime.now(KST).strftime("%H:%M") >= a.until:  # 실제 발송은 수동이라도 기준일 검사(11/25 검수 B16)
+            msg = f"[중단] 증시 자금: 금투협 기준일 {day} ≠ 직전 영업일 {prev} ({"수동 실행" if a.no_wait else a.until + "까지 확인"}) → 오늘 발송 안 함"
             log(msg)
             if not a.dry: alert(msg)
             return 3

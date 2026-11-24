@@ -13,6 +13,9 @@ if not tok or not chat:
 try:
     r = requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": chat, "text": msg}, timeout=30)
     print(f"알림 {'성공' if r.ok else '실패'} HTTP {r.status_code}")
+    if r.ok:
+        gh = os.environ.get("GITHUB_ENV")  # 한 사건엔 알림 하나: 이미 알렸으면 yml 'alert on crash'가 또 안 보냄
+        if gh: open(gh, "a").write("ALERTED=1\n")
 except Exception as e:
     s = re.sub(r"bot\d+:[A-Za-z0-9_-]+|\b\d{6,}:[A-Za-z0-9_-]{30,}", "bot***", f"{type(e).__name__}: {e}")
     print("알림 오류 " + s.replace(chat, "***"))

@@ -43,7 +43,7 @@ jobs:
           fi
           python -I funds/funds_cloud.py $ARGS
       - name: alert on crash
-        if: failure() && vars.FUNDS_SEND == 'on' && github.event_name == 'schedule'
+        if: failure() && env.ALERTED != '1' && vars.FUNDS_SEND == 'on' && (github.event_name == 'schedule' || github.event.inputs.dry == 'no')
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
         run: python -I common/tg_alert.py "[깃허브] 증시 자금 실행 실패 · https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

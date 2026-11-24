@@ -48,7 +48,7 @@ jobs:
           fi
           python -I rs/rs_send_cloud.py $ARGS
       - name: alert on crash
-        if: failure() && vars.RS_SEND == 'on' && github.event_name == 'schedule'
+        if: failure() && env.ALERTED != '1' && vars.RS_SEND == 'on' && (github.event_name == 'schedule' || github.event.inputs.dry == 'no')
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
         run: python -I common/tg_alert.py "[깃허브] 섹터 상대강도 실행 실패 · https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

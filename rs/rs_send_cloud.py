@@ -83,6 +83,9 @@ def alert(text):
     try:
         r = requests.post(f"https://api.telegram.org/bot{tok}/sendMessage", data={"chat_id": ROOMS[0]["id"], "text": text[:900]}, timeout=30)
         log(f"알림 발송 {'성공' if r.ok else '실패'} HTTP {r.status_code}")
+        if r.ok:
+            gh = os.environ.get("GITHUB_ENV")  # 한 사건엔 알림 하나: 이미 알렸으면 yml 'alert on crash'가 또 안 보냄
+            if gh: open(gh, "a").write("ALERTED=1\n")
     except Exception as e:
         log(f"알림 발송 오류 {type(e).__name__}: {e}")
 
@@ -132,7 +135,7 @@ def main():
     if a.kind == "auto":
         a.kind = "monday" if (a.first_day or today.weekday() == 0) else "weekday"
     try:
-        albums = build(a.kind, check=a.first_day)
+        albums = build(a.kind, check=a.first_day or not a.dry)  # 실제로 보내는 경로는 수동이라도 전부 기준일 검사(11/25 검수 B16)
     except Stale as e:
         log(str(e))
         if not a.dry: alert(str(e))
