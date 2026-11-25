@@ -1,0 +1,19 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>시장 히트맵 (미국 11-24 · 국내 11-24)</title>
+<style>html,body{margin:0;height:100%;background:#111;color:#eee;font-family:system-ui,sans-serif}
+#bar{display:flex;gap:6px;padding:6px 8px;align-items:center;background:#1b1b1b;border-bottom:1px solid #333}
+#bar button{font-size:15px;padding:6px 14px;border-radius:6px;border:1px solid #555;background:#222;color:#ddd;cursor:pointer}
+#bar button.on{background:#2f6fde;border-color:#2f6fde;color:#fff;font-weight:600}
+#bar span{font-size:12px;color:#999;margin-left:auto}
+iframe{border:0;width:100%;height:calc(100% - 46px);display:none;background:#fff}</style></head><body>
+<div id="bar"><button id="bUS" onclick="show('US')">미국</button><button id="bKR" onclick="show('KR')">국내</button>
+<span>미국 2026-11-24 · 국내 2026-11-24 종가</span></div>
+<iframe id="fUS" title="미국 히트맵"></iframe><iframe id="fKR" title="국내 히트맵"></iframe>
+
+<script>
+function show(m){for(const k of ["US","KR"]){const f=document.getElementById("f"+k);
+if(k===m&&!f.dataset.on){const s=document.getElementById("s"+k);if(s)f.srcdoc=s.textContent.split("</scr_ESC_ipt").join("</scr"+"ipt");else f.src="heatmap_"+k+".html";f.dataset.on=1}
+f.style.display=k===m?"block":"none";document.getElementById("b"+k).className=k===m?"on":""}
+try{history.replaceState(null,"","#"+m)}catch(e){}}
+show(location.hash==="#KR"?"KR":"US");
+</script></body></html>
