@@ -999,6 +999,12 @@ def build(market, asof, out):
         except Exception:
             pass
     data["X"] = X
+    # 2026-11-25 l(깃허브판): 지수 칩 날짜 ≠ 종목 기준일이면 칩·머리줄에 표시. 발송 쪽 검사(common/heatmap_check.py)가 이 문구를 보고 [중단]
+    xs = [x for x in X if x["date"] != d0]
+    if xs:
+        meta += " · 지수 기준일 다름: " + ", ".join(f'{x["name"]} {x["date"]}' for x in xs)
+        for x in xs:
+            x["name"] = f'{x["name"]} ({x["date"][5:].replace("-", "/")} 기준)'
     ibtn = "".join(f'<button data-x="{k}" class="{"up" if x["chg"] >= 0 else "dn"}" title="{html.escape(x["name"])} 차트({x["date"]} 종가)">{html.escape(x["name"])} '
                    f'<b>{"+" if x["chg"] > 0 else ""}{x["chg"]:.2f}%</b></button>' for k, x in enumerate(X))
     js = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")

@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       market:
-        description: "US / KR / both"
+        description: "US / KR / both(합본 1개)"
         default: both
       rooms:
         description: "보낼 방 번호(rooms.json), 비우면 저장소 변수 HEATMAP_ROOMS"
@@ -62,7 +62,7 @@ jobs:
         run: |
           M="${{ github.event.inputs.market }}"
           if [ -z "$M" ]; then
-            H=$(date -u +%-H); if [ "$H" -ge 6 ] && [ "$H" -lt 15 ]; then M=KR; else M=US; fi  # 국장 07:40~09:00 UTC(지연 포함), 미장 22:30~23:50 UTC
+            H=$(date -u +%-H); if [ "$H" -ge 6 ] && [ "$H" -lt 15 ]; then M=KR; else M=both; fi  # 국장 단독 07:40~09:00 UTC(지연 포함), 아침 07:30 KST = 미장+국장 합본(11/25 대표 A안)
           fi
           echo "market=$M" >> "$GITHUB_OUTPUT"
       - name: KR
@@ -77,26 +77,14 @@ jobs:
           ! grep -lP "김진|(?<![A-Za-z0-9_-])(KJ|naver)(?![A-Za-z0-9_-])" out/*.html
       # 발송 스위치: 저장소 변수 HEATMAP_SEND = on 일 때만(대표 '승인' 뒤에 켬). 방 = common/rooms.json 번호(저장소 변수 HEATMAP_ROOMS, 기본 1 = 내 방만): 1 내 방 2 투자 아이디어 3 금요일 온라인 스터디 4 일정매매 5 KIC 6 송도스터디(SCV) 7 모닝레터 8 추추클럽(11/25 대표 '그냥 모든 방에 진행해').
       # 수동 실행은 dry=no 일 때만 발송(11/25 시험 실행 오발송 재발 방지). 예약 실행: 그 시장 휴장일이면 안 보냄. 기준일 ≠ 직전 거래일이면 발송 중단 + 내 방 [중단] 경고(11/25 대표 재발 금지 원칙). 수동 실제 발송(dry=no)도 기준일 검사(휴장일 건너뛰기만 안 함).
-      - name: send KR
-        if: vars.HEATMAP_SEND == 'on' && github.event.inputs.dry != 'yes' && (steps.m.outputs.market == 'KR' || steps.m.outputs.market == 'both')
+      - name: combine (합본, 미장+국장)
+        if: steps.m.outputs.market == 'both'
+        run: python -I common/combine.py out/heatmap_US.html out/heatmap_KR.html out/heatmap.html
+      - name: send
+        if: vars.HEATMAP_SEND == 'on' && github.event.inputs.dry != 'yes'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-        run: |
-          MODE=""; if [ "${{ github.event_name }}" != "schedule" ]; then MODE=manual; fi
-          set +e; MSG=$(python -I common/heatmap_check.py out/heatmap_KR.html KR $MODE); RC=$?; set -e; echo "$MSG"
-          if [ $RC -eq 2 ]; then exit 0; fi
-          if [ $RC -ne 0 ]; then python -I common/tg_alert.py "$MSG"; exit 1; fi
-          python -I common/tg_send.py --file out/heatmap_KR.html --rooms "${{ github.event.inputs.rooms || vars.HEATMAP_ROOMS || '1' }}" --caption "$(python -I common/caption.py out/heatmap_KR.html '국내 히트맵')"
-      - name: send US
-        if: vars.HEATMAP_SEND == 'on' && github.event.inputs.dry != 'yes' && (steps.m.outputs.market == 'US' || steps.m.outputs.market == 'both')
-        env:
-          TG_TOKEN: ${{ secrets.TG_TOKEN }}
-        run: |
-          MODE=""; if [ "${{ github.event_name }}" != "schedule" ]; then MODE=manual; fi
-          set +e; MSG=$(python -I common/heatmap_check.py out/heatmap_US.html US $MODE); RC=$?; set -e; echo "$MSG"
-          if [ $RC -eq 2 ]; then exit 0; fi
-          if [ $RC -ne 0 ]; then python -I common/tg_alert.py "$MSG"; exit 1; fi
-          python -I common/tg_send.py --file out/heatmap_US.html --rooms "${{ github.event.inputs.rooms || vars.HEATMAP_ROOMS || '1' }}" --caption "$(python -I common/caption.py out/heatmap_US.html 'S&P500 히트맵')"
+        run: bash common/heatmap_send.sh "${{ steps.m.outputs.market }}" "${{ github.event.inputs.rooms || vars.HEATMAP_ROOMS || '1' }}" "${{ github.event_name }}"
       # 실패 알림: 만들기·검사·발송 중 하나라도 실패하면 내 방(rooms.json 1번)에 한 줄
       - name: alert on failure
         if: failure() && vars.HEATMAP_SEND == 'on' && env.ALERTED != '1' && (github.event_name == 'schedule' || github.event.inputs.dry == 'no')

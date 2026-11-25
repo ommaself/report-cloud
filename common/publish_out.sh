@@ -18,6 +18,11 @@ for m in $MS; do
     "$m" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(md5sum heatmap/heatmap_web.py | cut -c1-32)" "$D" "$(md5sum "out/heatmap_$m.html" | cut -c1-32)" \
     "$ROOMS" "$(date -u +%FT%TZ)" > "../outb/build_$m.json"
 done
+if [ "$M" = both ] && [ -f out/heatmap.html ]; then  # 합본(텔레 발송 파일 = 사이드 게시 파일)
+  cp out/heatmap.html ../outb/heatmap.html
+  printf '{"file":"heatmap.html","run_id":"%s","commit":"%s","code_md5":"%s","html_md5":"%s","rooms":"%s","built_utc":"%s"}\n' \
+    "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(md5sum heatmap/heatmap_web.py | cut -c1-32)" "$(md5sum out/heatmap.html | cut -c1-32)" "$ROOMS" "$(date -u +%FT%TZ)" > ../outb/build.json
+fi
 cd ../outb
 git add -A
 git commit -qm "히트맵 $MS run $GITHUB_RUN_ID"

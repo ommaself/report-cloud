@@ -13,6 +13,9 @@ got = mm.group(1) if mm else "?"
 manual = len(sys.argv) > 3 and sys.argv[3] == "manual"
 if not manual and not fresh.today_is_trading(m):
     print(f"오늘 {m} 휴장일 → 발송 안 함"); sys.exit(2)
+mx = re.search(r"지수 기준일 다름: ([^<\"]+)", open(p, encoding="utf-8").read())
+if mx:  # 2026-11-25 l: 지수 칩이 하루 전 값이면 등락이 틀림(11/25 코스피 -3.31% 오표시 사례) → 발송 중단
+    print(f"[중단] 히트맵 {m}: 지수 기준일 다름({mx.group(1).strip()}) ≠ 종목 기준 {got} → 발송 안 함"); sys.exit(3)
 e = fresh.expected(m).isoformat()
 if got == e:
     print(f"기준일 {got} 정상"); sys.exit(0)
