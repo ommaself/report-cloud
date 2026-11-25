@@ -14,7 +14,7 @@ fi
 for m in $MS; do
   cp "out/heatmap_$m.html" "../outb/heatmap_$m.html"
   D=$(grep -oE "기준 [0-9]{4}-[0-9]{2}-[0-9]{2} 종가" "out/heatmap_$m.html" | head -1 | grep -oE "[0-9-]{10}" || echo "?")
-  printf '{"market":"%s","run_id":"%s","commit":"%s","code_md5":"%s","asof":"%s","html_md5":"%s","index_md5":"%s","rooms":"%s","built_utc":"%s"}\n' \
+  printf '{"market":"%s","run_id":"%s","commit":"%s","code_md5":"%s","asof":"%s","html_md5":"%s","rooms":"%s","built_utc":"%s"}\n' \
     "$m" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(md5sum heatmap/heatmap_web.py | cut -c1-32)" "$D" "$(md5sum "out/heatmap_$m.html" | cut -c1-32)" \
     "$ROOMS" "$(date -u +%FT%TZ)" > "../outb/build_$m.json"
 done
