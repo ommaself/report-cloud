@@ -1,11 +1,13 @@
 r"""클릭형 히트맵 HTML(새 파일, 독립 실행). 핀비즈 접속·캡처·스크래핑 없음. 발송 기능 없음.
 
 그림(배치·색·섹터/산업 머리줄·한글명)은 heatmap.py의 squarify·color·SECTOR_KO·constituents·quotes를 이 파일에 그대로 복사해 PNG와 같게 만든다.
+2026-11-25 ma1124k: 위 필터(N일선 위 2개·정배열·완전 정배열)를 한 그룹 '하나만 선택'으로 통일(대표 09:36 지적 — 정배열만 중복 선택되던 기준 차이).
+  하나를 켜면 나머지는 꺼짐, 켜진 버튼을 다시 누르면 꺼지고 [전체]. 켜진 표시는 그룹 모두 같음(aria-pressed). 아래 안내문에 '필터는 하나만 선택됨'. 화면 JS·문구만, 판정·자료 j와 같음.
 2026-11-25 ma1124h: 10이평 추가(일·주·월 차트 모두, 국장 5·10·20·60·120·240, 미장 5·10·20·50·100·200).
   위 토글 2개(대표 07:05 확정, 정의는 ALIGN_SETS 상수, 일봉 마지막 값, 자료 부족 = 아님):
     [정배열] = 20>60>120>240일선(미장 20>50>100>200) + 종가>20일선
     [완전 정배열] = 5>10>20>60>120>240일선(미장 5>10>20>50>100>200), REQUIRE_PRICE_ABOVE_MA5 = True면 종가>5일선도(기본 꺼짐)
-  두 토글은 서로·'N일선 위'와 같이 켜면 모두 만족(AND). 버튼에 종목 수. 이평은 차트·N일선 위와 같은 종가·같은 단순평균.
+  (ma1124k부터 AND 없음: 필터는 하나만 선택) 버튼에 종목 수. 이평은 차트·N일선 위와 같은 종가·같은 단순평균.
   팝업의 '이평 정배열/역배열'은 전체 이평 순서로 판단.
   차트 자료 = 일봉 3년·주봉 7년·월봉 2000-01부터(처음 화면 1년·3년·10년, Ctrl+휠로 전체까지). 봉 자료는 가변 길이 문자(zigzag 5비트, 64자)로 압축(값 정밀도 같음).
   위 지수 칩(미장 S&P500·나스닥·다우·러셀2000, 국장 코스피·코스닥, 야후): 누르면 종목과 같은 차트 창.
@@ -719,13 +721,16 @@ D.S.forEach(function(s){
 });
 // 토글: 조건 밖 종목은 회색·투명도 25%(지우지 않음, 배치 그대로). 섹터 제목 옆에 섹터별 '위' 비율
 // 2026-11-25 ma1124h: [정배열] 토글(따로 켜고 끔), N일선 위와 같이 켜면 둘 다 만족(AND). [전체] = 둘 다 끔
+// 2026-11-25 ma1124k: 필터 그룹 하나만 선택. SEL = -1(전체) · 0..NF-1(N일선 위) · NF+k(정배열 k). 같은 버튼 다시 누르면 -1. FK·JON은 SEL에서 만듦(아래 계산 그대로)
 var FK = -1, JON = [false, false];  // JON[0] = 정배열, JON[1] = 완전 정배열
+var SEL = -1;
+function pick(i){ SEL = (i < 0 || i === SEL) ? -1 : i; var nf = FILT.length; FK = (SEL >= 0 && SEL < nf) ? SEL : -1; JON = [SEL === nf, SEL === nf + 1]; filt(); }
 function okT(t){ var it = D.items[t.i]; return (FK<0 || it.f[FK]===1) && (!JON[0] || it.j[0]===1) && (!JON[1] || it.j[1]===1); }
 function filt(k){
   if (k !== undefined){ FK = k; if (k < 0) JON = [false, false]; }
   var act = FK>=0 || JON[0] || JON[1];
-  document.querySelectorAll(".flt button[data-f]").forEach(function(x){ var f = Number(x.dataset.f); x.setAttribute("aria-pressed", (f<0 ? !act : f===FK) ? "true" : "false"); });
-  document.querySelectorAll(".flt button[data-j]").forEach(function(x){ x.setAttribute("aria-pressed", JON[Number(x.dataset.j)] ? "true" : "false"); });
+  document.querySelectorAll(".flt button[data-f]").forEach(function(x){ var f = Number(x.dataset.f); x.setAttribute("aria-pressed", (f<0 ? SEL<0 : f===SEL) ? "true" : "false"); });  // 2026-11-25 ma1124k
+  document.querySelectorAll(".flt button[data-j]").forEach(function(x){ x.setAttribute("aria-pressed", (FILT.length + Number(x.dataset.j)) === SEL ? "true" : "false"); });
   var on = 0;
   TILES.forEach(function(t){ var ok = !act || okT(t); if (ok) on++;
     t.r.setAttribute("fill", ok ? t.fill : "#6b7280"); t.g.style.opacity = ok ? "" : "0.25"; });
@@ -736,8 +741,8 @@ function filt(k){
     if (act) TILES.forEach(function(t){ if (t.cx>=s[0] && t.cx<=s[0]+s[2] && t.cy>=s[1] && t.cy<=s[1]+s[3]){ m++; if (okT(t)) a++; } });
     q.t.textContent = (!act || !m) ? "" : "  " + a + "/" + m + " (" + Math.round(a/m*100) + "%)"; });
 }
-document.querySelectorAll(".flt button[data-f]").forEach(function(b){ b.addEventListener("click", function(){ filt(Number(b.dataset.f)); }); });
-document.querySelectorAll(".flt button[data-j]").forEach(function(b){ b.addEventListener("click", function(){ var k = Number(b.dataset.j); JON[k] = !JON[k]; filt(); }); });
+document.querySelectorAll(".flt button[data-f]").forEach(function(b){ b.addEventListener("click", function(){ pick(Number(b.dataset.f)); }); });  // 2026-11-25 ma1124k: 하나만 선택
+document.querySelectorAll(".flt button[data-j]").forEach(function(b){ b.addEventListener("click", function(){ pick(FILT.length + Number(b.dataset.j)); }); });
 // 2026-11-24 ma1124d 확대·이동: viewBox만 바꿈(벡터 그대로라 확대해도 글자·테두리 선명)
 var VW = 32, VH = 18, MAXZ = 5, V = {x:0, y:0, z:1}, zb = document.getElementById("zb");
 function vapply(){
@@ -1037,7 +1042,7 @@ def build(market, asof, out):
                      + "".join(f'<button data-f="{j}" aria-pressed="false" title="마지막 종가 > {n}일선 · {fn[j]}종목 · 판정 불가 {nxf[j]}(표시 봉이 {n}봉 안)">{n}일선 위</button>' for j, n in enumerate(FILT[market]))
                      + "".join(f'<button data-j="{k}" aria-pressed="false" title="일봉 마지막 값 {html.escape(jdef[k])} · {jname[k]} {jn[k]} · 자료 부족 {jx[k]}(아님으로 처리) · 판정 불가 {nxj[k]}(표시 봉이 {ranges(market)[NF + k]}봉 안)">{jname[k]} {jn[k]}</button>' for k in (0, 1)))
             .replace("__IBTN__", ibtn)
-            .replace("__JNOTE__", f"정배열 = 일봉 마지막 값 {jdef[0]}({jn[0]}종목, 자료 부족 {jx[0]}종목은 제외). 완전 정배열 = 일봉 마지막 값 {jdef[1]}({jn[1]}종목, 자료 부족 {jx[1]}종목은 제외). 위 버튼들을 같이 켜면 모두 만족하는 종목만 밝게. "
+            .replace("__JNOTE__", f"정배열 = 일봉 마지막 값 {jdef[0]}({jn[0]}종목, 자료 부족 {jx[0]}종목은 제외). 완전 정배열 = 일봉 마지막 값 {jdef[1]}({jn[1]}종목, 자료 부족 {jx[1]}종목은 제외). 필터는 하나만 선택됨(다른 버튼을 누르면 바뀌고, 켜진 버튼을 다시 누르면 전체). "
                      f"⚠ 노란 점선 칸 = 일봉 3년 안 하루 ±{SUSPECT_JUMP:.0%} 점프 중 자료 오류(그날 거래량 0이거나 {SUSPECT_REVERT_BARS}봉 안 ±{SUSPECT_REVERT_TOL:.0%} 되돌림)·분할 미조정·가격 단절 가능(미확인) {nmk}종목. "
                      f"자료는 그대로 두고, 그 봉이 판정 이평 구간(마지막 N봉) 안일 때만 그 판정에서 빼서 '판정 불가'로 셈(굵은 점선 {nex}종목), 밖이면 표시만(옅은 점선)")
             .replace("__DATA__", js))
