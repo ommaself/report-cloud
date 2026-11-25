@@ -7,6 +7,8 @@ on:
       file: {description: "파일 이름", default: "heatmap_US.html"}
       start: {description: "보낸 시각 시작(UTC)", default: "2026-11-25T04:58:00"}
       end: {description: "보낸 시각 끝(UTC)", default: "2026-11-25T05:02:00"}
+      miss: {description: "슈퍼그룹 위쪽 끝 찾기 연속 없음 기준", default: "60"}
+      span: {description: "아래로 훑을 개수", default: "6000"}
 permissions:
   contents: read
 jobs:
@@ -25,4 +27,5 @@ jobs:
       - run: pip install -q requests==2.32.3
       - env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-        run: python -I -u common/tg_cleanup.py --rooms "${{ matrix.room }}" --file "${{ inputs.file }}" --start "${{ inputs.start }}" --end "${{ inputs.end }}"
+          TOP_MISS: ${{ inputs.miss }}
+        run: python -I -u common/tg_cleanup.py --rooms "${{ matrix.room }}" --file "${{ inputs.file }}" --start "${{ inputs.start }}" --end "${{ inputs.end }}" --span "${{ inputs.span }}"

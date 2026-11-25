@@ -36,17 +36,21 @@ def probe(chat, mid):
     return "other"
 
 
+MISS = int(os.environ.get("TOP_MISS", "60"))
+
+
 def top_super(chat):
     hi, k = 0, 1
     while k < 10_000_000:
         if probe(chat, k) != "none": hi = k
         k *= 2
     miss, m, top = 0, hi, hi
-    while miss < 60:
+    while miss < MISS:
         m += 1
         if probe(chat, m) != "none": top, miss = m, 0
         else: miss += 1
         time.sleep(0.03)
+    print(f"  위쪽 끝 찾기: 거듭제곱 탐색 {hi} → 끝 {top}(연속 없음 {MISS}개에서 멈춤)")
     return top
 
 
@@ -79,6 +83,7 @@ def main():
             if res.get("message_id"):
                 call("deleteMessage", chat_id=me, message_id=res["message_id"])  # 확인용 전달본 지움
             oldest = od
+            print(f"  봇 메시지 #{mid}: 파일 '{fn or '(파일 아님)'}' · 보낸 시각 {dt.datetime.fromtimestamp(od, dt.timezone.utc):%m-%d %H:%M:%S} UTC" if od else f"  봇 메시지 #{mid}: 전달 확인 실패 {(f.get('description') or '')[:80]}")
             if fn == a.file and t0 <= od <= t1:
                 if a.dry:
                     found.append((mid, "dry"))
