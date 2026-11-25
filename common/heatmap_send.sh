@@ -19,7 +19,7 @@ if [ "$M" = both ]; then
 }$MK"
     python -I common/tg_alert.py "$T"; exit 1
   fi
-  python -I common/combine.py out/heatmap_US.html out/heatmap_KR.html out/heatmap.html || exit 1
+  python -I common/combine.py out/heatmap_US.html out/heatmap_KR.html out/heatmap.html out/index.html || exit 1
   python -I common/tg_send.py --file out/heatmap.html --rooms "$ROOMS" --caption "$(python -I common/caption2.py out/heatmap_US.html out/heatmap_KR.html)"
   exit $?
 fi

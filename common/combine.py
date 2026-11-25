@@ -1,10 +1,12 @@
 r"""국장·미장 히트맵 HTML 2개를 파일 하나로(11/25 대표 A안: 화면 위 [미국][국내] 버튼으로 선택). 텔레 1건 발송·사이드 Artifact 공용.
 각 원본은 <script type="text/plain">에 그대로 넣고, 누를 때 iframe srcdoc으로 띄움(원본 화면·차트 그대로).
-사용: python common/combine.py out/heatmap_US.html out/heatmap_KR.html out/heatmap.html
+사용: python common/combine.py out/heatmap_US.html out/heatmap_KR.html out/heatmap.html [out/index.html]
+4번째 인자를 주면 같은 껍데기(버튼·문구 같음)로 사이드 Artifact용 index.html도 만듦: 원본을 넣지 않고 heatmap_US.html·heatmap_KR.html 파일을 불러옴(Artifact 파일당 16MB 한도 때문).
 """
 import re, sys
 
 us, kr, dst = sys.argv[1:4]
+idx = sys.argv[4] if len(sys.argv) > 4 else None
 ESC = "</scr_ESC_ipt"  # 원본 안의 </script 를 잠시 바꿔 둠(JS에서 되돌림)
 
 
@@ -20,7 +22,8 @@ def asof(p):
 
 
 du, dk = asof(us), asof(kr)
-page = f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+def shell(embed):
+    return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>시장 히트맵 (미국 {du[5:]} · 국내 {dk[5:]})</title>
 <style>html,body{{margin:0;height:100%;background:#111;color:#eee;font-family:system-ui,sans-serif}}
 #bar{{display:flex;gap:6px;padding:6px 8px;align-items:center;background:#1b1b1b;border-bottom:1px solid #333}}
@@ -31,14 +34,20 @@ iframe{{border:0;width:100%;height:calc(100% - 46px);display:none;background:#ff
 <div id="bar"><button id="bUS" onclick="show('US')">미국</button><button id="bKR" onclick="show('KR')">국내</button>
 <span>미국 {du} · 국내 {dk} 종가</span></div>
 <iframe id="fUS" title="미국 히트맵"></iframe><iframe id="fKR" title="국내 히트맵"></iframe>
-<script type="text/plain" id="sUS">{load(us)}</script>
-<script type="text/plain" id="sKR">{load(kr)}</script>
+{embed}
 <script>
 function show(m){{for(const k of ["US","KR"]){{const f=document.getElementById("f"+k);
-if(k===m&&!f.dataset.on){{f.srcdoc=document.getElementById("s"+k).textContent.split("{ESC}").join("</scr"+"ipt");f.dataset.on=1}}
+if(k===m&&!f.dataset.on){{const s=document.getElementById("s"+k);if(s)f.srcdoc=s.textContent.split("{ESC}").join("</scr"+"ipt");else f.src="heatmap_"+k+".html";f.dataset.on=1}}
 f.style.display=k===m?"block":"none";document.getElementById("b"+k).className=k===m?"on":""}}
 try{{history.replaceState(null,"","#"+m)}}catch(e){{}}}}
 show(location.hash==="#KR"?"KR":"US");
 </script></body></html>"""
+
+
+page = shell(f'''<script type="text/plain" id="sUS">{load(us)}</script>
+<script type="text/plain" id="sKR">{load(kr)}</script>''')
 open(dst, "w", encoding="utf-8").write(page)
 print(f"합본 {dst}: 미국 {du} · 국내 {dk}")
+if idx:
+    open(idx, "w", encoding="utf-8").write(shell(""))
+    print(f"사이드용 {idx}(같은 껍데기, 파일 불러오기)")

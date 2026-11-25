@@ -79,7 +79,7 @@ jobs:
       # 수동 실행은 dry=no 일 때만 발송(11/25 시험 실행 오발송 재발 방지). 예약 실행: 그 시장 휴장일이면 안 보냄. 기준일 ≠ 직전 거래일이면 발송 중단 + 내 방 [중단] 경고(11/25 대표 재발 금지 원칙). 수동 실제 발송(dry=no)도 기준일 검사(휴장일 건너뛰기만 안 함).
       - name: combine (합본, 미장+국장)
         if: steps.m.outputs.market == 'both'
-        run: python -I common/combine.py out/heatmap_US.html out/heatmap_KR.html out/heatmap.html
+        run: python -I common/combine.py out/heatmap_US.html out/heatmap_KR.html out/heatmap.html out/index.html
       - name: send
         if: vars.HEATMAP_SEND == 'on' && github.event.inputs.dry != 'yes'
         env:
