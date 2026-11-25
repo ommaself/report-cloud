@@ -1,0 +1,24 @@
+name: tg-cleanup
+# 11/25 대표 지시: 내 방 밖으로 잘못 나간 히트맵을 모두에게서 삭제(수동 실행 전용)
+on:
+  workflow_dispatch:
+    inputs:
+      rooms: {description: "방 번호", default: "2,3,4,5,6,7,8"}
+      file: {description: "파일 이름", default: "heatmap_US.html"}
+      start: {description: "보낸 시각 시작(UTC)", default: "2026-11-25T04:58:00"}
+      end: {description: "보낸 시각 끝(UTC)", default: "2026-11-25T05:02:00"}
+      dry: {description: "yes = 찾기만", default: "no"}
+permissions:
+  contents: read
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -q requests==2.32.3
+      - env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: python -I common/tg_cleanup.py --rooms "${{ inputs.rooms }}" --file "${{ inputs.file }}" --start "${{ inputs.start }}" --end "${{ inputs.end }}" $([ "${{ inputs.dry }}" = yes ] && echo --dry)
