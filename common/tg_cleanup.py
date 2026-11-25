@@ -29,6 +29,9 @@ def probe(chat, mid):
     """'none' 없음 / 'other' 남의 메시지 / 'own' 봇 메시지"""
     r = call("editMessageReplyMarkup", chat_id=chat, message_id=mid)
     d = (r.get("description") or "").lower()
+    global NDIAG
+    if NDIAG > 0:
+        NDIAG -= 1; print(f"  [점검] #{mid}: ok={r.get('ok')} {d[:90]}")
     if r.get("ok") or "not modified" in d:
         return "own"
     if "not found" in d or "message_id_invalid" in d:
@@ -36,6 +39,7 @@ def probe(chat, mid):
     return "other"
 
 
+NDIAG = int(os.environ.get("DIAG", "0"))
 MISS = int(os.environ.get("TOP_MISS", "60"))
 
 

@@ -9,6 +9,7 @@ on:
       end: {description: "보낸 시각 끝(UTC)", default: "2026-11-25T05:02:00"}
       miss: {description: "슈퍼그룹 위쪽 끝 찾기 연속 없음 기준", default: "60"}
       span: {description: "아래로 훑을 개수", default: "6000"}
+      diag: {description: "점검 출력 개수", default: "0"}
 permissions:
   contents: read
 jobs:
@@ -28,4 +29,5 @@ jobs:
       - env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TOP_MISS: ${{ inputs.miss }}
+          DIAG: ${{ inputs.diag }}
         run: python -I -u common/tg_cleanup.py --rooms "${{ matrix.room }}" --file "${{ inputs.file }}" --start "${{ inputs.start }}" --end "${{ inputs.end }}" --span "${{ inputs.span }}"
