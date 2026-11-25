@@ -71,6 +71,7 @@ jobs:
         run: python -I heatmap/heatmap_web.py --market US --out out/heatmap_US.html
       - name: check (김진·KJ·네이버 0건)
         run: |
+          grep -oE ".{0,60}(김진|KJ|naver).{0,60}" out/*.html | sort | uniq -c | head -20 || true
           ! grep -lE "김진|KJ|naver" out/*.html
       # 발송 스위치: 저장소 변수 HEATMAP_SEND = on 일 때만(대표 '승인' 뒤에 켬). 방 = common/rooms.json 번호(저장소 변수 HEATMAP_ROOMS, 기본 1 = 내 방만): 1 내 방 2 투자 아이디어 3 금요일 온라인 스터디 4 일정매매 5 KIC 6 송도스터디(SCV) 7 모닝레터 8 추추클럽(11/25 대표 '그냥 모든 방에 진행해').
       # 수동 실행은 dry=no 일 때만 발송(11/25 시험 실행 오발송 재발 방지). 예약 실행: 그 시장 휴장일이면 안 보냄. 기준일 ≠ 직전 거래일이면 발송 중단 + 내 방 [중단] 경고(11/25 대표 재발 금지 원칙). 수동 실제 발송(dry=no)도 기준일 검사(휴장일 건너뛰기만 안 함).
