@@ -396,7 +396,7 @@ def judge(rows, market, key):
 
 
 def classify(z, J, spl, market):
-    """2026-11-25 ma1124i 점프 원인(야후 분할 이벤트 + 가격 모양만. 네이버·KRX 안 씀). → (판단, 근거)"""
+    """2026-11-25 ma1124i 점프 원인(야후 분할 이벤트 + 가격 모양만, 다른 출처 안 씀). → (판단, 근거)"""
     t = dt.date.fromisoformat(z["date"])
     near = [e for e in spl if e[1] and e[2] and abs((dt.date.fromisoformat(e[0]) - t).days) <= 3]
     evn = ""
@@ -417,7 +417,7 @@ def classify(z, J, spl, market):
     if not z["v20"] and z["vol"]:  # 점프 전 20봉 거래량이 모두 0 = 거래정지로 보임 → 재개 첫날 점프
         return "미확인", f"점프 전 20봉 거래량 0(거래정지로 보임) → 재개 첫날 {z['ratio']:.2f}배·거래량 있음·되돌림 없음 = 실제 가격 변화 가능성 높으나 야후 자료만으로 확정 못 함" + evn
     if market == "KR" and z["ratio"] < 1:
-        return "미확인", f"국장 급락·되돌림 없음·거래량 {vr:.1f}배 → 권리락(무상증자 등) 가능하나 야후 분할 이벤트 없음, KRX·네이버 확인은 금지라 확정 못 함" + evn
+        return "미확인", f"국장 급락·되돌림 없음·거래량 {vr:.1f}배 → 권리락(무상증자 등) 가능하나 야후 분할 이벤트 없음, 야후 자료만으로 확정 못 함" + evn
     if vr >= 3:
         return ("실제 급등" if z["ratio"] > 1 else "실제 급락"), f"되돌림 없음 + 거래량 20일 평균의 {vr:.1f}배" + evn
     return "미확인", f"되돌림 없음·거래량 20일 평균의 {vr:.1f}배(3배 미만) → 야후 자료만으로 판단 못 함" + evn

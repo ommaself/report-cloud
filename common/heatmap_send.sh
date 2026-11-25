@@ -5,6 +5,10 @@
 set -uo pipefail
 M="$1"; ROOMS="$2"; EV="$3"
 MODE=""; [ "$EV" != schedule ] && MODE=manual
+sent() {  # 모든 방 발송 성공일 때만 SENT=1(out 저장 조건). 일부 실패면 저장 안 함(실패 알림은 yml)
+  [ "$1" -eq 0 ] && [ -n "${GITHUB_ENV:-}" ] && { echo "SENT=1"; echo "SENT_ROOMS=$ROOMS"; } >> "$GITHUB_ENV"
+  return 0
+}
 check() {  # $1 시장 $2 모드 → 출력 문구, 반환 0 정상 2 휴장 3 옛 자료
   python -I common/heatmap_check.py "out/heatmap_$1.html" "$1" $2
 }
@@ -21,10 +25,11 @@ if [ "$M" = both ]; then
   fi
   python -I common/combine.py out/heatmap_US.html out/heatmap_KR.html out/heatmap.html out/index.html || exit 1
   python -I common/tg_send.py --file out/heatmap.html --rooms "$ROOMS" --caption "$(python -I common/caption2.py out/heatmap_US.html out/heatmap_KR.html)"
-  exit $?
+  RC=$?; sent $RC; exit $RC
 fi
 MSG=$(check "$M" "$MODE"); RC=$?; echo "$MSG"
 [ $RC -eq 2 ] && exit 0
 [ $RC -ne 0 ] && { python -I common/tg_alert.py "$MSG"; exit 1; }
 T='국내 히트맵'; [ "$M" = US ] && T='S&P500 히트맵'
 python -I common/tg_send.py --file "out/heatmap_$M.html" --rooms "$ROOMS" --caption "$(python -I common/caption.py "out/heatmap_$M.html" "$T")"
+RC=$?; sent $RC; exit $RC

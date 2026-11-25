@@ -74,7 +74,7 @@ jobs:
       - name: check (김진·KJ·네이버 0건)
         run: |
           # 압축 봉 자료(영문·숫자 문자열) 속 우연한 KJ·naver는 빼고, 낱말로 나온 것만 잡음
-          ! grep -lP "김진|(?<![A-Za-z0-9_-])(KJ|naver)(?![A-Za-z0-9_-])" out/*.html
+          ! grep -lP "김진|네이버|(?<![A-Za-z0-9_-])(KJ|naver)(?![A-Za-z0-9_-])" out/*.html
       # 발송 스위치: 저장소 변수 HEATMAP_SEND = on 일 때만(대표 '승인' 뒤에 켬). 방 = common/rooms.json 번호(저장소 변수 HEATMAP_ROOMS, 기본 1 = 내 방만): 1 내 방 2 투자 아이디어 3 금요일 온라인 스터디 4 일정매매 5 KIC 6 송도스터디(SCV) 7 모닝레터 8 추추클럽(11/25 대표 '그냥 모든 방에 진행해').
       # 수동 실행은 dry=no 일 때만 발송(11/25 시험 실행 오발송 재발 방지). 예약 실행: 그 시장 휴장일이면 안 보냄. 기준일 ≠ 직전 거래일이면 발송 중단 + 내 방 [중단] 경고(11/25 대표 재발 금지 원칙). 수동 실제 발송(dry=no)도 기준일 검사(휴장일 건너뛰기만 안 함).
       - name: combine (합본, 미장+국장)
@@ -84,7 +84,8 @@ jobs:
         if: vars.HEATMAP_SEND == 'on' && github.event.inputs.dry != 'yes'
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
-        run: bash common/heatmap_send.sh "${{ steps.m.outputs.market }}" "${{ github.event.inputs.rooms || vars.HEATMAP_ROOMS || '1' }}" "${{ github.event_name }}"
+        # 방: 국장·미장 단독 = HEATMAP_ROOMS. 합본(07:30) = HEATMAP_COMBINED_ROOMS, 없으면 내 방(1)만(11/25 검수: 대표가 폰에서 열리는지 확인 뒤 8방으로)
+        run: bash common/heatmap_send.sh "${{ steps.m.outputs.market }}" "${{ github.event.inputs.rooms || (steps.m.outputs.market == 'both' && (vars.HEATMAP_COMBINED_ROOMS || '1')) || vars.HEATMAP_ROOMS || '1' }}" "${{ github.event_name }}"
       # 실패 알림: 만들기·검사·발송 중 하나라도 실패하면 내 방(rooms.json 1번)에 한 줄
       - name: alert on failure
         if: failure() && vars.HEATMAP_SEND == 'on' && env.ALERTED != '1' && (github.event_name == 'schedule' || github.event.inputs.dry == 'no')
@@ -93,13 +94,14 @@ jobs:
         run: python -I common/tg_alert.py "[깃허브] 히트맵 ${{ steps.m.outputs.market }} 실패 · 실행 기록 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
       # 사이드 Artifact 연동(11/25 대표 '연동해야지'): 실제로 보낸 판만 비공개 브랜치 out에 덮어씀(KR·US 따로) + build_시장.json
       - name: publish to out branch
-        if: success() && ((vars.HEATMAP_SEND == 'on' && (github.event_name == 'schedule' || github.event.inputs.dry == 'no')) || github.ref_name != 'main')
+        # 실제로 텔레 발송에 성공한 판만(SENT=1, heatmap_send.sh가 씀). 시험 브랜치는 dry도 out-test에 저장
+        if: success() && (env.SENT == '1' || (github.ref_name != 'main' && github.event.inputs.dry == 'yes'))
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           OUTB: ${{ github.ref_name == 'main' && 'out' || 'out-test' }}   # main이 아닌 브랜치 시험은 out-test에만
         run: |
           # 저장 실패는 발송과 별개: 잡은 안 실패시키고 내 방에 한 줄(사이드 연동 안 됨 표시)
-          bash common/publish_out.sh "${{ steps.m.outputs.market }}" "${{ github.event.inputs.rooms || vars.HEATMAP_ROOMS || '1' }}" || { echo "out 저장 실패"; if [ "${{ github.ref_name }}" = main ]; then python -I common/tg_alert.py "[깃허브] 히트맵 out 저장 실패(발송은 됨, 사이드 연동 안 됨) · https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"; fi; }
+          bash common/publish_out.sh "${{ steps.m.outputs.market }}" "${{ env.SENT_ROOMS || 'dry' }}" || { echo "out 저장 실패"; if [ "${{ github.ref_name }}" = main ]; then python -I common/tg_alert.py "[깃허브] 히트맵 out 저장 실패(발송은 됨, 사이드 연동 안 됨) · https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"; fi; }
       - uses: actions/upload-artifact@v4
         with:
           name: heatmap-${{ steps.m.outputs.market }}-${{ github.run_number }}
