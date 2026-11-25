@@ -43,6 +43,8 @@ jobs:
   build:
     needs: guard
     if: needs.guard.outputs.go == '1'
+    permissions:
+      contents: write   # out 브랜치에 보낸 판 저장(main은 안 건드림)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -101,6 +103,15 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
         run: python -I common/tg_alert.py "[깃허브] 히트맵 ${{ steps.m.outputs.market }} 실패 · 실행 기록 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      # 사이드 Artifact 연동(11/25 대표 '연동해야지'): 실제로 보낸 판만 비공개 브랜치 out에 덮어씀(KR·US 따로) + build_시장.json
+      - name: publish to out branch
+        if: success() && ((vars.HEATMAP_SEND == 'on' && (github.event_name == 'schedule' || github.event.inputs.dry == 'no')) || github.ref_name != 'main')
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          OUTB: ${{ github.ref_name == 'main' && 'out' || 'out-test' }}   # main이 아닌 브랜치 시험은 out-test에만
+        run: |
+          # 저장 실패는 발송과 별개: 잡은 안 실패시키고 내 방에 한 줄(사이드 연동 안 됨 표시)
+          bash common/publish_out.sh "${{ steps.m.outputs.market }}" "${{ github.event.inputs.rooms || vars.HEATMAP_ROOMS || '1' }}" || { echo "out 저장 실패"; if [ "${{ github.ref_name }}" = main ]; then python -I common/tg_alert.py "[깃허브] 히트맵 out 저장 실패(발송은 됨, 사이드 연동 안 됨) · https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"; fi; }
       - uses: actions/upload-artifact@v4
         with:
           name: heatmap-${{ steps.m.outputs.market }}-${{ github.run_number }}
